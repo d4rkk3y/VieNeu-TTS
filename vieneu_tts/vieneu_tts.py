@@ -140,6 +140,12 @@ class VieNeuTTS:
                 n_ctx=self.max_context,
                 mlock=True,
                 flash_attn=True if backbone_device == "gpu" else False,
+                n_threads=8,
+                n_threads_batch=8,
+                use_mmap=False,
+                use_mlock=True,
+                tensor_split=[0.5, 0.5],
+                offload_kqv=True
             )
             self._is_quantized_model = True
             

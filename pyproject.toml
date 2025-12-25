@@ -31,6 +31,7 @@ dependencies = [
     "lmdeploy",
     "triton-windows; sys_platform == 'win32'",
     "triton; sys_platform != 'win32'",
+    "llama-cpp-python",
 ]
 
 [tool.uv.sources]
@@ -40,4 +41,7 @@ torchaudio = { index = "pytorch" }
 lmdeploy = [
     { url = "https://github.com/InternLM/lmdeploy/releases/download/v0.11.0/lmdeploy-0.11.0+cu128-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32' and python_version == '3.12'" },
     { url = "https://github.com/InternLM/lmdeploy/releases/download/v0.11.0/lmdeploy-0.11.0+cu128-cp312-cp312-manylinux2014_x86_64.whl", marker = "sys_platform == 'linux' and python_version == '3.12'" },
+]
+llama-cpp-python = [
+    { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.18-cu128-AVX2-linux-20251220/llama_cpp_python-0.3.18-cp312-cp312-linux_x86_64.whl", marker = "sys_platform == 'linux' and python_version == '3.12'" }
 ]

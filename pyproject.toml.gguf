@@ -1,0 +1,68 @@
+[tool.uv]
+index-strategy = "unsafe-best-match"
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+override-dependencies = [
+    "nvidia-nccl-cu12; sys_platform == 'linux'",
+]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+
+[project]
+name = "VieNeu-TTS"
+version = "0.1.0"
+description = "Advanced on-device Vietnamese TTS with instant voice cloning"
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    "phonemizer>=3.3.0",
+    "neucodec>=0.0.4",
+    "librosa>=0.11.0",
+    "gradio>=5.49.1",
+    "onnxruntime>=1.23.2",
+    "datasets>=3.2.0",
+    "llama-cpp-python"
+    "triton-windows; sys_platform == 'win32'",
+    "triton; sys_platform == 'linux'",
+    "transformers; sys_platform == 'darwin'",
+    "accelerate; sys_platform == 'darwin'",
+    
+    "torch",
+    "torchvision",
+    "torchaudio",
+]
+
+[tool.uv.sources]
+
+torch = [
+    { index = "pytorch", marker = "sys_platform != 'darwin'" },
+    { index = "pypi", marker = "sys_platform == 'darwin'" } 
+]
+torchvision = [
+    { index = "pytorch", marker = "sys_platform != 'darwin'" },
+    { index = "pypi", marker = "sys_platform == 'darwin'" }
+]
+torchaudio = [
+    { index = "pytorch", marker = "sys_platform != 'darwin'" },
+    { index = "pypi", marker = "sys_platform == 'darwin'" }
+]
+
+llama-cpp-python = [
+    { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.19-cu128-Basic-linux-20251231/llama_cpp_python-0.3.19-cp312-cp312-linux_x86_64.whl" }
+]
+
+lmdeploy = [
+    { url = "https://github.com/InternLM/lmdeploy/releases/download/v0.11.0/lmdeploy-0.11.0+cu128-cp312-cp312-win_amd64.whl", marker = "sys_platform == 'win32' and python_version == '3.12'" },
+    { url = "https://github.com/InternLM/lmdeploy/releases/download/v0.11.0/lmdeploy-0.11.0+cu128-cp312-cp312-manylinux2014_x86_64.whl", marker = "sys_platform == 'linux' and python_version == '3.12'" },
+    { index = "pypi", marker = "sys_platform == 'darwin'" }
+]

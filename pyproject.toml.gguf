@@ -31,7 +31,7 @@ dependencies = [
     "gradio>=5.49.1",
     "onnxruntime>=1.23.2",
     "datasets>=3.2.0",
-    "llama-cpp-python",
+    "llama-cpp-python; sys_platform == 'linux'",
     "triton-windows; sys_platform == 'win32'",
     "triton; sys_platform == 'linux'",
     "transformers; sys_platform == 'darwin'",
@@ -58,7 +58,7 @@ torchaudio = [
 ]
 
 llama-cpp-python = [
-    { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.19-cu128-Basic-linux-20251231/llama_cpp_python-0.3.19-cp312-cp312-linux_x86_64.whl" }
+    { url = "https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.19-cu128-Basic-linux-20251231/llama_cpp_python-0.3.19-cp312-cp312-linux_x86_64.whl", marker = "sys_platform == 'linux' and python_version == '3.12'" }
 ]
 
 lmdeploy = [

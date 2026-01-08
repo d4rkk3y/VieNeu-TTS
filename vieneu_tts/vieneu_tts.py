@@ -310,8 +310,8 @@ class VieNeuTTS:
                 max_length=self.max_context,
                 eos_token_id=speech_end_id,
                 do_sample=True,
-                temperature=0.7,
-                top_k=50,
+                temperature=0.5,
+                top_k=20,
                 use_cache=True,
                 min_new_tokens=50,
             )
@@ -333,8 +333,8 @@ class VieNeuTTS:
         output = self.backbone(
             prompt,
             max_tokens=self.max_context,
-            temperature=0.7,
-            top_k=50,
+            temperature=0.5,
+            top_k=20,
             stop=["<|SPEECH_GENERATION_END|>"],
         )
         output_str = output["choices"][0]["text"]
@@ -358,8 +358,8 @@ class VieNeuTTS:
         for item in self.backbone(
             prompt,
             max_tokens=self.max_context,
-            temperature=0.7,
-            top_k=50,
+            temperature=0.5,
+            top_k=20,
             stop=["<|SPEECH_GENERATION_END|>"],
             stream=True
         ):
@@ -446,7 +446,7 @@ class FastVieNeuTTS:
         codec_repo="neuphonic/neucodec",
         codec_device="cuda",
         memory_util=0.3,
-        tp=1,
+        tp=-1,
         enable_prefix_caching=True,
         quant_policy=0,
         enable_triton=True,
@@ -524,7 +524,7 @@ class FastVieNeuTTS:
             cache_max_entry_count=memory_util,
             tp=tp,
             enable_prefix_caching=enable_prefix_caching,
-            dtype='bfloat16',
+            dtype='auto',
             quant_policy=quant_policy
         )
         
@@ -532,9 +532,9 @@ class FastVieNeuTTS:
         
         self.gen_config = GenerationConfig(
             top_p=0.95,
-            top_k=50,
-            temperature=0.7,
-            max_new_tokens=2048,
+            top_k=20,
+            temperature=0.5,
+            max_new_tokens=512,
             do_sample=True,
             min_new_tokens=40,
         )

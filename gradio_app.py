@@ -190,7 +190,7 @@ def load_model(backbone_choice: str, codec_choice: str, device_choice: str,
                     codec_repo=codec_config["repo"],
                     codec_device=codec_device,
                     memory_util=0.3,
-                    tp=1,
+                    tp=-1,
                     enable_prefix_caching=True,
                     enable_triton=True,
                 )

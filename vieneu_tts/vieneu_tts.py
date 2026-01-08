@@ -534,9 +534,9 @@ class FastVieNeuTTS:
             top_p=0.95,
             top_k=20,
             temperature=0.5,
-            max_new_tokens=512,
+            max_new_tokens=2048,
             do_sample=True,
-            min_new_tokens=40,
+            min_new_tokens=20,
         )
         
         print(f"   LMDeploy TurbomindEngine initialized")

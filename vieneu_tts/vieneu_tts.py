@@ -446,7 +446,7 @@ class FastVieNeuTTS:
         codec_repo="neuphonic/neucodec",
         codec_device="cuda",
         memory_util=0.3,
-        tp=-1,
+        tp=1,
         enable_prefix_caching=True,
         quant_policy=0,
         enable_triton=True,

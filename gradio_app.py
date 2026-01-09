@@ -433,7 +433,9 @@ def synthesize_speech(text: str, voice_choice: str, custom_audio, custom_text: s
         yield None, f"❌ Lỗi xử lý reference: {e}"
         return
     
-    (text_chunks, flags) = split_text_into_chunks(raw_text, max_chars=MAX_CHARS_PER_CHUNK)
+    chunk_result = split_text_into_chunks(raw_text, max_chars=MAX_CHARS_PER_CHUNK, min_chars=100)
+    text_chunks = chunk_result["chunks"]
+    flags = chunk_result["flags"]
     total_chunks = len(text_chunks)
     
     # === STANDARD MODE ===

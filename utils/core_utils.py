@@ -105,89 +105,142 @@ def process_audio_sequence(
     # Final merge of all chunks
     return np.concatenate(output_chunks)
 
-def split_text_into_chunks(text: str, max_chars: int = 256) -> Tuple[List[str], List[int]]:
+def split_text_into_chunks(
+    text: str, 
+    max_chars: int = 256, 
+    min_chars: int = 50
+):
     """
-    Split raw text into chunks no longer than max_chars.
-    
-    If a sentence is split by words (because it exceeds max_chars), 
-    a period '.' is added to the end of the split chunk to help TTS processing,
-    even though the flag is set to 1 (continuation).
-
-    Returns:
-        (chunks, flags): 
-        - chunks: List of text strings.
-        - flags: List of ints. 
-                 1: Chunk is a continuation (split by word).
-                 0: Chunk is a new sentence start.
+    Chunks text for TTS by respecting natural pause boundaries (.,!?;:—).
+    Adds periods only if a hard word-cut is required.
     """
-    # Split by sentence endings (. ! ? ...) or newlines
-    sentences = re.split(r"(?<=[\.\!\?\…\n])\s+|(?<=\n)", text.strip())
     
-    chunks: List[str] = []
-    flags: List[int] = []
+    # --- Step 1: Split text into "Breath Groups" / Sentences ---
+    # We split by: . ! ? … (Sentence terminators)
+    # And also: , ; : — (Phrase/Pause markers)
+    # This creates smaller atoms, allowing the merger to fill max_chars more efficiently.
     
-    buffer = ""
-    next_chunk_is_continuation = 0
+    # Regex explanation:
+    # (?<=...) : Lookbehind (checks if preceded by)
+    # [.!?…,;:—] : Matches any of these punctuation marks
+    # \s+ : Matches one or more whitespace characters
+    raw_sentences = re.split(r'(?<=[.!?…,;:—])\s+', text)
+    
+    # Clean empty strings
+    sentences = [s.strip() for s in raw_sentences if s.strip()]
+    
+    if not sentences:
+        return {"chunks": [], "flags": []}
 
-    def flush_buffer():
-        nonlocal buffer, next_chunk_is_continuation
-        if buffer:
-            chunks.append(buffer.strip())
-            flags.append(next_chunk_is_continuation)
-            buffer = ""
-            next_chunk_is_continuation = 0
+    # --- Step 2: Create Atoms ---
+    # An atom is a text block + metadata.
+    # Metadata: 
+    #   - is_continuation: Is this atom a continuation of the previous atom's sentence?
+    #   - requires_period: Does this atom need a period IF it ends a chunk (hard cut)?
+    
+    atoms = []
 
-    for sentence in sentences:
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-
-        # --- CASE 1: Sentence fits within max_chars ---
-        if len(sentence) <= max_chars:
-            candidate = f"{buffer} {sentence}".strip() if buffer else sentence
+    for sent in sentences:
+        # Check if the "breath group" itself fits in max_chars
+        if len(sent) <= max_chars:
+            atoms.append({
+                'text': sent,
+                'is_continuation': False, # Natural break, so treated as new/clean start context
+                'requires_period': False  # Already has punctuation (.,;:)
+            })
+        else:
+            # Hard split needed (Breath group is still too huge)
+            words = sent.split(' ')
+            current_buffer = ""
+            first_split = True
             
-            if len(candidate) <= max_chars:
-                buffer = candidate
-            else:
-                flush_buffer()
-                buffer = sentence
-                next_chunk_is_continuation = 0
-            continue
-
-        # --- CASE 2: Sentence is HUGE (larger than max_chars) ---
-        flush_buffer()
-        
-        words = sentence.split()
-        current_segment = ""
-        current_flag = 0 
-
-        for word in words:
-            candidate = f"{current_segment} {word}".strip() if current_segment else word
-            
-            if len(candidate) > max_chars and current_segment:
-                # 1. Add the current full segment WITH A PERIOD
-                # We intentionally add '.' here per requirement
-                chunk_to_add = current_segment.strip() + "." 
+            for word in words:
+                # Reserve 1 char for potential period
+                space_needed = 1 if current_buffer else 0
                 
-                chunks.append(chunk_to_add)
-                flags.append(current_flag)
-                
-                # 2. Prepare for the next segment
-                current_segment = word
-                current_flag = 1 
-            else:
-                current_segment = candidate
-        
-        # Add the final piece of the long sentence
-        if current_segment:
-            chunks.append(current_segment.strip())
-            flags.append(current_flag)
+                if len(current_buffer) + space_needed + len(word) + 1 <= max_chars:
+                    current_buffer += (" " if current_buffer else "") + word
+                else:
+                    # Buffer full. Create atom.
+                    atoms.append({
+                        'text': current_buffer,
+                        'is_continuation': not first_split,
+                        'requires_period': True # Hard cut -> Needs period
+                    })
+                    first_split = False
+                    current_buffer = word
             
-        next_chunk_is_continuation = 0
+            # Append the remainder
+            if current_buffer:
+                atoms.append({
+                    'text': current_buffer,
+                    'is_continuation': True, 
+                    'requires_period': False # Ends with original punctuation
+                })
 
-    flush_buffer()
+    # --- Step 3: Merge Atoms into Chunks ---
     
-    return chunks, flags
+    final_chunks = []
+    final_flags = []
+    
+    current_chunk_atoms = [] 
+    current_chunk_len = 0    
+    
+    for atom in atoms:
+        text_len = len(atom['text'])
+        prefix_len = 1 if current_chunk_atoms else 0
+        
+        # Cost check: Current + Space + NewAtom + (Period if NewAtom needs it and ends chunk)
+        # Note: We don't know if NewAtom ends the chunk yet, but we must reserve space just in case.
+        potential_period_len = 1 if atom['requires_period'] else 0
+        
+        total_cost = current_chunk_len + prefix_len + text_len + potential_period_len
+        
+        if total_cost <= max_chars:
+            # Fits in current chunk
+            current_chunk_atoms.append(atom)
+            current_chunk_len += prefix_len + text_len
+        else:
+            # Does not fit. Finalize current chunk.
+            if current_chunk_atoms:
+                # Construct text
+                chunk_str = ""
+                for i, a in enumerate(current_chunk_atoms):
+                    prefix = " " if i > 0 else ""
+                    chunk_str += prefix + a['text']
+                
+                # Check last atom for period requirement
+                if current_chunk_atoms[-1]['requires_period']:
+                    chunk_str += "."
+                
+                # Flag logic: Based on the start of the chunk
+                first_atom_is_cont = current_chunk_atoms[0]['is_continuation']
+                
+                final_chunks.append(chunk_str)
+                final_flags.append(1 if first_atom_is_cont else 0)
+            
+            # Start new chunk with current atom
+            current_chunk_atoms = [atom]
+            current_chunk_len = len(atom['text'])
+
+    # --- Step 4: Handle Remainder ---
+    if current_chunk_atoms:
+        chunk_str = ""
+        for i, a in enumerate(current_chunk_atoms):
+            prefix = " " if i > 0 else ""
+            chunk_str += prefix + a['text']
+        
+        if current_chunk_atoms[-1]['requires_period']:
+            chunk_str += "."
+            
+        first_atom_is_cont = current_chunk_atoms[0]['is_continuation']
+        final_chunks.append(chunk_str)
+        final_flags.append(1 if first_atom_is_cont else 0)
+        
+    return {
+        "chunks": final_chunks,
+        "flags": final_flags
+    }
 
 def env_bool(name: str, default: bool = False) -> bool:
     v = os.getenv(name)

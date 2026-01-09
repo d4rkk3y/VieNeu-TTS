@@ -12,7 +12,7 @@ from typing import Generator, Optional, Tuple
 import queue
 import threading
 import yaml
-from utils.core_utils import process_audio_sequence, split_text_into_chunks, env_bool
+from utils.core_utils import process_audio_sequence, punc_norm, split_text_into_chunks, env_bool
 from functools import lru_cache
 import gc
 
@@ -433,7 +433,7 @@ def synthesize_speech(text: str, voice_choice: str, custom_audio, custom_text: s
         yield None, f"❌ Lỗi xử lý reference: {e}"
         return
     
-    chunk_result = split_text_into_chunks(raw_text, max_chars=MAX_CHARS_PER_CHUNK)
+    chunk_result = split_text_into_chunks(punc_norm(raw_text), max_chars=MAX_CHARS_PER_CHUNK)
     text_chunks = chunk_result["chunks"]
     flags = chunk_result["flags"]
     total_chunks = len(text_chunks)

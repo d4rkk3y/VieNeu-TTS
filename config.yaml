@@ -1,5 +1,5 @@
 text_settings:
-  max_chars_per_chunk: 256
+  max_chars_per_chunk: 128
   max_total_chars_streaming: 3000
 
 backbone_configs:

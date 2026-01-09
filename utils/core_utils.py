@@ -93,192 +93,153 @@ def process_audio_sequence(
 
     return np.concatenate(output_chunks)
 
-def punc_norm(text: str) -> str:
-    """
-    Refined Normalization for TTS:
-    1. Standardizes quotes/dashes but preserves meaning.
-    2. Keeps ? and ! for intonation.
-    3. Handles spacing.
-    """
-    if not text or not text.strip():
-        return ""
-
-    # 1. Standardize quotes to straight quotes (easier to handle)
-    # Replace smart quotes with straight quotes
-    text = text.replace('“', '"').replace('”', '"').replace('‘', "'").replace('’', "'")
-
-    # 2. Capitalize first letter
-    text = text.strip()
-    if text and text[0].islower():
-        text = text[0].upper() + text[1:]
-
-    # 3. Filter specific "unspeakable" noise, BUT keep currency/math if your TTS supports it.
-    # We allow: . , ? ! - $ % + =
-    # We strip: ' " [ ] { } ( ) * < > / \ ^ # @ ~ ` _ |
-    chars_to_remove = r'[\'\"\[\]\{\}\(\)\*\<\>\/\\\^\#\@\~\`\_\|]'
-    text = re.sub(chars_to_remove, '', text)
-
-    # 4. Normalize Pause Markers
-    # Map :, ;, — (em-dash) to Comma. 
-    # NOTE: We do NOT map standard hyphen (-) to comma to protect words like "re-do"
-    text = re.sub(r'[:;—]', ',', text)
-    
-    # 5. Normalize Ellipsis -> Period (or comma if you prefer short pause)
-    text = re.sub(r'[…]', '.', text)
-
-    # 6. Clean up spacing around punctuation
-    # "word ," -> "word,"
-    text = re.sub(r'\s+([,.?!])', r'\1', text)
-    # "word,word" -> "word, word" (Add space after punctuation if missing)
-    text = re.sub(r'([,.?!])(?=[a-zA-Z0-9])', r'\1 ', text)
-
-    # 7. Deduplication
-    text = re.sub(r'\.+', '.', text)     # ...... -> .
-    text = re.sub(r'!+', '!', text)      # !!!!!! -> !
-    text = re.sub(r'\?+', '?', text)     # ?????? -> ?
-    text = re.sub(r',+', ',', text)      # ,,,,,, -> ,
-    
-    # Resolve punctuation conflicts (Period wins over comma)
-    text = re.sub(r'[,]+\.', '.', text)
-    text = re.sub(r'\.[,]+', '.', text)
-
-    # 8. Collapse whitespace
-    text = " ".join(text.split())
-
-    # 9. Ensure valid ending
-    if text and text[-1] not in '.?!':
-        if text.endswith(','):
-            text = text[:-1] + "."
-        else:
-            text += "."
-
-    return text
-
 def split_text_into_chunks(text: str, max_chars: int = 256):
     """
-    Chunks text preserving semantic boundaries and intonation markers.
+    Chunks text using a strict hierarchy:
+    1. Split by Sentence terminators.
+    2. If a sentence > max_chars, split that specific sentence by Phrase markers.
+    3. If a phrase > max_chars, split that specific phrase by Words.
+    
+    Constraint: Never merge a whole sentence with a fragment of a split sentence.
     """
     if not text:
         return {"chunks": [], "flags": []}
-        
-    # Define sets
-    # We keep ? and ! as sentence enders to preserve intonation in the chunk
+
+    # --- Definitions ---
+    # 0 = Sentence End (Long pause)
+    # 2 = Phrase End (Short pause)
+    # 1 = Continuation (No pause / jagged split)
     SENTENCE_ENDERS = set('.!?\n') 
-    PHRASE_MARKERS = set(',')
+    PHRASE_MARKERS = set(',;:') # Added ; and : for robustness
 
-    # 1. Regex split (Keep delimiters)
-    # Split by . ? ! or ,
-    parts = re.split(r'([.!?\n]+|[,])', text)
-    
-    atoms = []
-    i = 0
-    while i < len(parts):
-        content = parts[i].strip()
-        if not content:
-            i += 1
-            continue
-            
-        delim = ""
-        # Check if next part is a delimiter
-        if i + 1 < len(parts):
-            candidate = parts[i+1]
-            if any(c in SENTENCE_ENDERS or c in PHRASE_MARKERS for c in candidate):
-                delim = candidate
-                i += 1
-        
-        # Determine Atom Type (for pause flags)
-        # 0 = Sentence End (Long pause)
-        # 2 = Phrase End (Short pause / Comma)
-        # 1 = Continuation (No delim)
-        atom_type = 1 
-        
-        if delim:
-            if any(c in SENTENCE_ENDERS for c in delim):
-                atom_type = 0
-            elif any(c in PHRASE_MARKERS for c in delim):
-                atom_type = 2
-        
-        atoms.append({
-            'text': content + delim,
-            'type': atom_type
-        })
-        i += 1
-    
-    if not atoms:
-        return {"chunks": [], "flags": []}
-
-    # 2. Merge logic
     final_chunks = []
     final_flags = []
-    
-    current_chunk_str = ""
-    current_chunk_flag = 0 
-    
-    for atom in atoms:
-        atom_text = atom['text']
-        
-        prefix = " " if current_chunk_str else ""
-        cost = len(current_chunk_str) + len(prefix) + len(atom_text)
-        
-        if cost <= max_chars:
-            current_chunk_str += prefix + atom_text
-            # Identify the flag based on the *last* atom added to this chunk
-            last_atom_type = atom['type'] 
-        else:
-            # === OVERFLOW ===
-            # Push current buffer
-            if current_chunk_str:
-                # Ensure the chunk ends with a "stopper" for TTS stability
-                # If it ended with a comma, we swap to period for the audio file 
-                # (so pitch drops), but keep flag 2 if you want shorter silence logic elsewhere.
-                # However, usually for TTS chunks:
-                # Ending with ',' often leaves the model "hanging" (pitch stays up).
-                # It is safer to force '.' at the end of a physical chunk.
-                final_text = current_chunk_str
-                if final_text.strip()[-1] == ',':
-                     final_text = final_text.strip()[:-1] + "."
 
-                final_chunks.append(final_text)
-                final_flags.append(current_chunk_flag)
-                
-                # The flag for the NEXT chunk is determined by how the PREVIOUS atom ended.
-                # If previous atom was type 0 (.), this new chunk starts fresh (flag 0).
-                # Actually, usually flags represent the PAUSE AFTER the chunk.
-                current_chunk_flag = last_atom_type
+    def get_flag(chunk_text):
+        """Determine pause flag based on the last character."""
+        s = chunk_text.strip()
+        if not s: return 1
+        last_char = s[-1]
+        if last_char in SENTENCE_ENDERS:
+            return 0
+        if last_char in PHRASE_MARKERS:
+            return 2
+        return 1
 
-            # Check if new atom fits
-            if len(atom_text) <= max_chars:
-                current_chunk_str = atom_text
-                last_atom_type = atom['type']
-            else:
-                # === HARD SPLIT (Word by Word) ===
-                words = atom_text.split(' ')
-                buffer = ""
-                
-                for word in words:
-                    sp = " " if buffer else ""
-                    if len(buffer) + len(sp) + len(word) + 1 <= max_chars:
-                        buffer += sp + word
+    def clean_and_finalize_chunk(txt):
+        """Helper to ensure TTS stability (e.g. converting trailing , to .)."""
+        txt = txt.strip()
+        if not txt: return
+        
+        flag = get_flag(txt)
+        
+        # If a chunk ends in a comma but is being isolated, 
+        # it is often better for TTS to treat it as a period to drop pitch.
+        # However, we preserve the flag '2' if you handle shorter pauses downstream,
+        # OR we can force it to '.'. 
+        # Here we follow the standard stability practice:
+        if txt[-1] == ',':
+            txt = txt[:-1] + "."
+        
+        final_chunks.append(txt)
+        final_flags.append(flag)
+
+    def split_with_delimiters(text, pattern):
+        """Splits text but attaches the delimiter to the preceding text."""
+        parts = re.split(pattern, text)
+        result = []
+        i = 0
+        while i < len(parts):
+            content = parts[i]
+            delim = ""
+            if i + 1 < len(parts):
+                delim = parts[i+1]
+            
+            full_atom = content + delim
+            if full_atom.strip():
+                result.append(full_atom)
+            i += 2
+        return result
+
+    # ==========================================
+    # LEVEL 1: Split by Sentences
+    # ==========================================
+    sentences = split_with_delimiters(text, r'([.!?\n]+)')
+    
+    current_buffer = ""
+
+    for sentence in sentences:
+        
+        # Check if this single sentence exceeds the limit
+        if len(sentence) > max_chars:
+            # === CRITICAL REQUIREMENT ===
+            # "Do not merge a sentence with a part of sentence which split by lower priority"
+            # So, flush whatever whole sentences we have accumulated so far.
+            if current_buffer:
+                clean_and_finalize_chunk(current_buffer)
+                current_buffer = ""
+
+            # Now process the huge sentence individually (Level 2)
+            
+            # ==========================================
+            # LEVEL 2: Split by Phrases (within the huge sentence)
+            # ==========================================
+            phrases = split_with_delimiters(sentence, r'([,;:]+)')
+            phrase_buffer = ""
+
+            for phrase in phrases:
+                if len(phrase) > max_chars:
+                    # Flush existing phrase buffer
+                    if phrase_buffer:
+                        clean_and_finalize_chunk(phrase_buffer)
+                        phrase_buffer = ""
+                    
+                    # ==========================================
+                    # LEVEL 3: Split by Words (within the huge phrase)
+                    # ==========================================
+                    words = phrase.split(' ')
+                    word_buffer = ""
+                    
+                    for word in words:
+                        sp = " " if word_buffer else ""
+                        if len(word_buffer) + len(sp) + len(word) + 1 <= max_chars:
+                            word_buffer += sp + word
+                        else:
+                            # Hard split overflow
+                            clean_and_finalize_chunk(word_buffer + "...")
+                            word_buffer = word # Start new with current word
+                    
+                    if word_buffer:
+                        # Append the remainder of the word split. 
+                        # Note: This remainder carries the original punctuation of the phrase.
+                        clean_and_finalize_chunk(word_buffer)
+
+                else:
+                    # Phrase fits
+                    sp = " " if phrase_buffer else ""
+                    if len(phrase_buffer) + len(sp) + len(phrase) <= max_chars:
+                        phrase_buffer += sp + phrase
                     else:
-                        # Flush hard chunk
-                        # We append "..." or "." to indicate a break
-                        final_chunks.append(buffer + "...") 
-                        final_flags.append(1) # Flag 1 = Continuation (very short/no pause)
-                        buffer = word
-                
-                current_chunk_str = buffer
-                last_atom_type = atom['type']
+                        clean_and_finalize_chunk(phrase_buffer)
+                        phrase_buffer = phrase
+            
+            # Flush remaining phrases from this specific huge sentence
+            if phrase_buffer:
+                clean_and_finalize_chunk(phrase_buffer)
 
-    # Final flush
-    if current_chunk_str:
-        final_text = current_chunk_str
-        # Fix trailing comma
-        if final_text.strip()[-1] == ',':
-             final_text = final_text.strip()[:-1] + "."
-             
-        final_chunks.append(final_text)
-        # The final chunk usually gets a full stop pause (0)
-        final_flags.append(0)
+        else:
+            # Sentence fits comfortably. 
+            # Standard merge logic with previous WHOLE sentences.
+            sp = " " if current_buffer else ""
+            if len(current_buffer) + len(sp) + len(sentence) <= max_chars:
+                current_buffer += sp + sentence
+            else:
+                clean_and_finalize_chunk(current_buffer)
+                current_buffer = sentence
+
+    # Final flush of any whole sentences left
+    if current_buffer:
+        clean_and_finalize_chunk(current_buffer)
 
     return {
         "chunks": final_chunks,

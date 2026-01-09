@@ -485,7 +485,7 @@ def synthesize_speech(text: str, voice_choice: str, custom_audio, custom_text: s
             
             yield None, "💾 Đang ghép file và lưu..."
             
-            final_wav = process_audio_sequence(all_audio_segments, flags, sr, 30, 30, 150)
+            final_wav = process_audio_sequence(all_audio_segments, flags, sr, 30, 30, 100, 0)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                 sf.write(tmp.name, final_wav, sr)
                 output_path = tmp.name

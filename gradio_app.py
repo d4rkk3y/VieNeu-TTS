@@ -12,7 +12,7 @@ from typing import Generator, Optional, Tuple
 import queue
 import threading
 import yaml
-from utils.core_utils import split_text_into_chunks, env_bool
+from utils.core_utils import process_audio_sequence, split_text_into_chunks, env_bool
 from functools import lru_cache
 import gc
 
@@ -433,7 +433,7 @@ def synthesize_speech(text: str, voice_choice: str, custom_audio, custom_text: s
         yield None, f"❌ Lỗi xử lý reference: {e}"
         return
     
-    text_chunks = split_text_into_chunks(raw_text, max_chars=MAX_CHARS_PER_CHUNK)
+    (text_chunks, flags) = split_text_into_chunks(raw_text, max_chars=MAX_CHARS_PER_CHUNK)
     total_chunks = len(text_chunks)
     
     # === STANDARD MODE ===
@@ -464,11 +464,7 @@ def synthesize_speech(text: str, voice_choice: str, custom_audio, custom_text: s
                 
                 chunk_wavs = tts.infer_batch(text_chunks, ref_codes, ref_text_raw, max_batch_size=max_batch_size_run)
                 
-                for i, chunk_wav in enumerate(chunk_wavs):
-                    if chunk_wav is not None and len(chunk_wav) > 0:
-                        all_audio_segments.append(chunk_wav)
-                        if i < total_chunks - 1:
-                            all_audio_segments.append(silence_pad)
+                all_audio_segments = chunk_wavs
             else:
                 # Sequential processing
                 for i, chunk in enumerate(text_chunks):
@@ -487,7 +483,7 @@ def synthesize_speech(text: str, voice_choice: str, custom_audio, custom_text: s
             
             yield None, "💾 Đang ghép file và lưu..."
             
-            final_wav = np.concatenate(all_audio_segments)
+            final_wav = process_audio_sequence(all_audio_segments, flags, sr, 30, 30, 150)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                 sf.write(tmp.name, final_wav, sr)
                 output_path = tmp.name

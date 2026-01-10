@@ -699,7 +699,7 @@ class FastVieNeuTTS:
     def _format_prompt(self, ref_codes: list[int], ref_text: str, input_text: str) -> str:
         """Format prompt for LMDeploy"""
         ref_text_phones = phonemize_with_dict(ref_text)
-        input_text_phones = phonemize_with_dict(input_text)
+        input_text_phones = phonemize_with_dict(input_text, normalize_text=False)
         
         codes_str = "".join([f"<|speech_{idx}|>" for idx in ref_codes])
         

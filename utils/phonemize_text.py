@@ -122,11 +122,12 @@ def phonemize_text(text: str) -> str:
     )
 
 
-def phonemize_with_dict(text: str, phoneme_dict=phoneme_dict) -> str:
+def phonemize_with_dict(text: str, phoneme_dict=phoneme_dict, normalize_text: bool = True) -> str:
     """
     Phonemize single text with dictionary lookup and EN tag support.
     """
-    text = normalizer.normalize(text)
+    if normalize_text:
+        text = normalizer.normalize(text)
     
     # Split by EN tags
     parts = re.split(r'(<en>.*?</en>)', text, flags=re.IGNORECASE)

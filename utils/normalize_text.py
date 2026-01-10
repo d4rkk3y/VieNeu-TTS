@@ -368,12 +368,12 @@ class VietnameseTTSNormalizer:
     def _normalize_special_chars(self, text):
         """Handle special characters."""
         # Remove quotes first to avoid creating spaces before commas
+        text = text.replace('“', '')
+        text = text.replace('”', '')
+        text = text.replace('‘', '')
+        text = text.replace('’', '')
         text = text.replace('"', '')
         text = text.replace("'", '')
-        text = text.replace(''', '')
-        text = text.replace(''', '')
-        text = text.replace('"', '')
-        text = text.replace('"', '')
         
         text = text.replace('&', ' và ')
         text = text.replace('+', ' cộng ')

@@ -93,67 +93,6 @@ def process_audio_sequence(
 
     return np.concatenate(output_chunks)
 
-def punc_norm(text: str) -> str:
-    """
-    Refined Normalization for TTS:
-    1. Standardizes quotes/dashes but preserves meaning.
-    2. Keeps ? and ! for intonation.
-    3. Handles spacing.
-    """
-    if not text or not text.strip():
-        return ""
-
-    # 1. Standardize quotes to straight quotes (easier to handle)
-    # Replace smart quotes with straight quotes
-    text = text.replace('“', '"').replace('”', '"').replace('‘', "'").replace('’', "'")
-
-    # 2. Capitalize first letter
-    text = text.strip()
-    if text and text[0].islower():
-        text = text[0].upper() + text[1:]
-
-    # 3. Filter specific "unspeakable" noise, BUT keep currency/math if your TTS supports it.
-    # We allow: . , ? ! - $ % + =
-    # We strip: ' " [ ] { } ( ) * < > / \ ^ # @ ~ ` _ |
-    chars_to_remove = r'[\'\"\[\]\{\}\(\)\*\<\>\/\\\^\#\@\~\`\_\|]'
-    text = re.sub(chars_to_remove, '', text)
-
-    # 4. Normalize Pause Markers
-    # Map :, ;, — (em-dash) to Comma. 
-    # NOTE: We do NOT map standard hyphen (-) to comma to protect words like "re-do"
-    text = re.sub(r'[:;—]', ',', text)
-    
-    # 5. Normalize Ellipsis -> Period (or comma if you prefer short pause)
-    text = re.sub(r'[…]', '.', text)
-
-    # 6. Clean up spacing around punctuation
-    # "word ," -> "word,"
-    text = re.sub(r'\s+([,.?!])', r'\1', text)
-    # "word,word" -> "word, word" (Add space after punctuation if missing)
-    text = re.sub(r'([,.?!])(?=[a-zA-Z0-9])', r'\1 ', text)
-
-    # 7. Deduplication
-    text = re.sub(r'\.+', '.', text)     # ...... -> .
-    text = re.sub(r'!+', '!', text)      # !!!!!! -> !
-    text = re.sub(r'\?+', '?', text)     # ?????? -> ?
-    text = re.sub(r',+', ',', text)      # ,,,,,, -> ,
-    
-    # Resolve punctuation conflicts (Period wins over comma)
-    text = re.sub(r'[,]+\.', '.', text)
-    text = re.sub(r'\.[,]+', '.', text)
-
-    # 8. Collapse whitespace
-    text = " ".join(text.split())
-
-    # 9. Ensure valid ending
-    if text and text[-1] not in '.?!':
-        if text.endswith(','):
-            text = text[:-1] + "."
-        else:
-            text += "."
-
-    return text
-
 def split_text_into_chunks(text: str, max_chars: int = 256):
     """
     Chunks text using a strict hierarchy:

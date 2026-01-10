@@ -12,7 +12,8 @@ from typing import Generator, Optional, Tuple
 import queue
 import threading
 import yaml
-from utils.core_utils import process_audio_sequence, punc_norm, split_text_into_chunks, env_bool
+from utils.core_utils import process_audio_sequence, split_text_into_chunks, env_bool
+from utils.normalize_text import VietnameseTTSNormalizer
 from functools import lru_cache
 import gc
 
@@ -46,6 +47,7 @@ current_backbone = None
 current_codec = None
 model_loaded = False
 using_lmdeploy = False
+normalizer = None
 
 # Cache for reference texts
 _ref_text_cache = {}
@@ -146,7 +148,7 @@ def cleanup_gpu_memory():
 def load_model(backbone_choice: str, codec_choice: str, device_choice: str, 
                force_lmdeploy: bool):
     """Load model with optimizations and max batch size control"""
-    global tts, current_backbone, current_codec, model_loaded, using_lmdeploy
+    global tts, current_backbone, current_codec, model_loaded, using_lmdeploy, normalizer
     lmdeploy_error_reason = None
     
     yield (
@@ -155,6 +157,8 @@ def load_model(backbone_choice: str, codec_choice: str, device_choice: str,
         gr.update(interactive=False),
         gr.update(interactive=False)
     )
+
+    normalizer = VietnameseTTSNormalizer()
     
     try:
         # Cleanup before loading new model
@@ -377,7 +381,7 @@ def load_reference_info(voice_choice: str) -> Tuple[Optional[str], str]:
 def synthesize_speech(text: str, voice_choice: str, custom_audio, custom_text: str, 
                      mode_tab: str, generation_mode: str, use_batch: bool, max_batch_size_run: int):
     """Synthesis with optimization support and max batch size control"""
-    global tts, current_backbone, current_codec, model_loaded, using_lmdeploy
+    global tts, current_backbone, current_codec, model_loaded, using_lmdeploy, normalizer
     
     if not model_loaded or tts is None:
         yield None, "⚠️ Vui lòng tải model trước!"
@@ -433,7 +437,7 @@ def synthesize_speech(text: str, voice_choice: str, custom_audio, custom_text: s
         yield None, f"❌ Lỗi xử lý reference: {e}"
         return
     
-    chunk_result = split_text_into_chunks(punc_norm(raw_text), max_chars=MAX_CHARS_PER_CHUNK)
+    chunk_result = split_text_into_chunks(normalizer.normalize(raw_text), max_chars=MAX_CHARS_PER_CHUNK)
     text_chunks = chunk_result["chunks"]
     flags = chunk_result["flags"]
     total_chunks = len(text_chunks)

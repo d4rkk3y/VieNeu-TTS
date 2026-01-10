@@ -818,7 +818,7 @@ with gr.Blocks(theme=theme, css=css, title="VieNeu-TTS") as demo:
                     <div class="warning-banner-item">
                         <strong>🐆 Hệ máy GPU</strong>
                         <div class="warning-banner-content">
-                            Chọn <b>VieNeu-TTS-0.3B (GPU)</b> để x2 tốc độ (chất lượng ~95% so với bản gốc).
+                            Chọn <b>VieNeu-TTS-0.3B (GPU)</b> để x2 tốc độ (độ chính xác ~95% bản gốc).
                         </div>
                     </div>
                 </div>

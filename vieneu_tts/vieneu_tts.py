@@ -313,7 +313,7 @@ class VieNeuTTS:
                 eos_token_id=speech_end_id,
                 do_sample=True,
                 temperature=1.0,
-                top_k=20,
+                top_k=50,
                 use_cache=True,
                 min_new_tokens=50,
             )
@@ -336,7 +336,7 @@ class VieNeuTTS:
             prompt,
             max_tokens=self.max_context,
             temperature=1.0,
-            top_k=20,
+            top_k=50,
             stop=["<|SPEECH_GENERATION_END|>"],
         )
         output_str = output["choices"][0]["text"]
@@ -361,7 +361,7 @@ class VieNeuTTS:
             prompt,
             max_tokens=self.max_context,
             temperature=1.0,
-            top_k=20,
+            top_k=50,
             stop=["<|SPEECH_GENERATION_END|>"],
             stream=True
         ):
@@ -534,7 +534,7 @@ class FastVieNeuTTS:
         
         self.gen_config = GenerationConfig(
             top_p=0.95,
-            top_k=20,
+            top_k=50,
             temperature=1.0,
             max_new_tokens=2048,
             do_sample=True,
